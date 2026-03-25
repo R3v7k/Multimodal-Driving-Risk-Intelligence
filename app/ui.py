@@ -1,12 +1,16 @@
+# Code and architecture created by Luis Villeda
 import streamlit as st
 import requests
 import json
+import base64
+from PIL import Image
+import io
 
 # Configure Streamlit page
 st.set_page_config(page_title="Driving Risk Intelligence", layout="wide")
 
 st.title("🚗 Multimodal Driving Risk Intelligence")
-st.markdown("Upload incident data to assess road hazard categories and risk scores using PyTorch and Gemini 1.5 Pro.")
+st.markdown("Upload incident data to assess road hazard categories and risk scores using YOLO26 and Gemini 1.5 Pro.")
 
 # Sidebar for inputs
 with st.sidebar:
@@ -54,17 +58,48 @@ if analyze_btn:
             if response.status_code == 200:
                 result = response.json()
                 
-                col1, col2, col3 = st.columns(3)
+                # 70/30 Split for modern UI
+                col_img, col_data = st.columns([2.5, 1.5], gap="large")
                 
-                hazard_map = {0: "None", 1: "Vehicle", 2: "Pedestrian", 3: "Animal", 4: "Infrastructure"}
-                hazard_name = hazard_map.get(result['hazard_category'], "Unknown")
+                with col_img:
+                    if result.get("annotated_image_base64"):
+                        img_bytes = base64.b64decode(result["annotated_image_base64"])
+                        img = Image.open(io.BytesIO(img_bytes))
+                        st.image(img, use_column_width=True, caption="Clean Annotated Scene")
+                    else:
+                        st.info("No image provided for analysis.")
                 
-                col1.metric("Hazard Category", hazard_name)
-                col2.metric("Risk Score", f"{result['risk_score']:.2f}")
-                col3.metric("Provider", result['provider_used'].upper())
-                
-                st.subheader("AI Reasoning")
-                st.info(result['reasoning'])
+                with col_data:
+                    st.subheader("Scene Summary")
+                    
+                    hazard_map = {0: "None", 1: "Vehicle", 2: "Pedestrian", 3: "Animal", 4: "Infrastructure"}
+                    hazard_name = hazard_map.get(result['hazard_category'], "Unknown")
+                    
+                    st.metric("Hazard Category", hazard_name)
+                    st.metric("Risk Score", f"{result['risk_score']:.2f}")
+                    st.metric("Provider", result['provider_used'].upper())
+                    
+                    report_summary = result.get("report_summary")
+                    if report_summary:
+                        st.markdown("---")
+                        st.markdown("### 📊 By Class")
+                        for super_cat, data in report_summary.items():
+                            st.markdown(f"**{super_cat}: {data['total']}**")
+                            for sub_cat, count in data['subtypes'].items():
+                                st.markdown(f"- {sub_cat}: {count}")
+                    
+                    detections_legend = result.get("detections_legend")
+                    if detections_legend:
+                        st.markdown("---")
+                        st.markdown("### 🔍 Detection Legend")
+                        with st.expander("View Object Details", expanded=True):
+                            for det in detections_legend:
+                                icon = "🔴" if det["is_primary"] else "🔵"
+                                st.markdown(f"{icon} **ID {det['id']}:** {det['label']} - *{det['confidence']:.2f} conf*")
+                    
+                    st.markdown("---")
+                    st.subheader("🧠 AI Reasoning")
+                    st.info(result['reasoning'])
                 
             else:
                 st.error(f"API Error: {response.status_code} - {response.text}")

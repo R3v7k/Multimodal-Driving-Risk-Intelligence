@@ -1,5 +1,7 @@
+# Code and architecture created by Luis Villeda
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
+from typing import Optional, Dict, Any, List
 import sys
 import os
 
@@ -15,6 +17,9 @@ class InferenceResponse(BaseModel):
     risk_score: float
     reasoning: str
     provider_used: str
+    annotated_image_base64: Optional[str] = None
+    report_summary: Optional[Dict[str, Any]] = None
+    detections_legend: Optional[List[Dict[str, Any]]] = None
 
 @app.get("/")
 def read_root():
@@ -40,13 +45,13 @@ async def predict_risk(
         "driver_alertness": driver_alertness
     }
     
-    # In a real app, process the uploaded image here
-    # image_bytes = await image.read() if image else None
+    image_bytes = await image.read() if image else None
     
     result = engine.run_inference(
         report_text=report_text,
         structured_data=structured_data,
-        use_provider=provider
+        use_provider=provider,
+        image_bytes=image_bytes
     )
     
     return result

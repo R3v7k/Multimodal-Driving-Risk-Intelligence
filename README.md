@@ -1,5 +1,9 @@
 # Multimodal Driving Risk Intelligence
 
+> **Credits & Author**
+> * Code and architecture created by Luis Villeda
+> * **Luis Alonso Villeda** - lvilleda7k@gmail.com
+
 A production-grade, end-to-end system for predicting road hazard categories and risk scores using a Late-Fusion Multimodal Architecture.
 
 ## Key Features & Recent Updates

@@ -1,3 +1,4 @@
+# Code and architecture created by Luis Villeda
 import os
 import json
 import torch
@@ -14,7 +15,7 @@ class DrivingDataEngine:
     def __init__(self, api_key=None):
         api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-pro')
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     def generate_synthetic_scenarios(self, count=10):
         """

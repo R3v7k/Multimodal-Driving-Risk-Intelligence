@@ -1,3 +1,4 @@
+# Code and architecture created by Luis Villeda
 import torch
 import torch.nn as nn
 import torchvision.models as models
