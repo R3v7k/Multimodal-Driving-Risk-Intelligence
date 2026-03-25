@@ -1,0 +1,5 @@
+{
+  "name": "Multimodal Driving Risk Intelligence",
+  "description": "A multimodal PyTorch and FastAPI system for predicting road hazard categories and risk scores.",
+  "requestFramePermissions": []
+}
