@@ -2,6 +2,18 @@
 
 A production-grade, end-to-end system for predicting road hazard categories and risk scores using a Late-Fusion Multimodal Architecture.
 
+## Key Features & Recent Updates
+
+1. **React-Based Dashboard (`src/App.tsx`)**: A modern, interactive frontend built with React and Tailwind CSS to visualize the risk intelligence system directly in the browser.
+2. **Functional Image Upload**: The dashboard supports uploading dashcam images (.jpg, .png) to simulate visual input for the multimodal engine.
+3. **Dynamic LLM Provider Selection**: Users can seamlessly switch between multiple LLM providers and their specific models for risk reasoning:
+   - **Gemini** (`gemini-1.5-pro`, `gemini-1.5-flash`, `gemini-2.5-flash`, `gemini-3.1-pro-preview`)
+   - **OpenAI** (`gpt-4o`, `gpt-4-turbo`, `gpt-3.5-turbo`)
+   - **Claude** (`claude-3-5-sonnet-20240620`, `claude-3-opus-20240229`, `claude-3-haiku-20240307`)
+   - **DeepSeek** (`deepseek-chat`, `deepseek-coder`)
+4. **Principal-Level Data Engine (`src/data_engine.py`)**: Uses Gemini 1.5 Pro to procedurally generate synthetic driving incident metadata and labels. Includes a custom PyTorch `MultimodalDrivingDataset` to handle the fusion of images and synthetic metadata.
+5. **Updated Training Loop (`src/train.py`)**: Fully integrated with the new `DrivingDataEngine` to automatically generate data and train the PyTorch model with early stopping and checkpointing.
+
 ## High-Level System Architecture
 
 The system ingests three modalities of data:
@@ -9,7 +21,7 @@ The system ingests three modalities of data:
 2. **Structured Data:** Telemetry (speed, weather, time) processed via a Multi-Layer Perceptron (MLP).
 3. **Text (NLP):** Incident reports processed via a GRU (or Transformer embeddings).
 
-These representations are fused and passed to classification and regression heads. An LLM (Gemini 1.5 Pro) provides explainable reasoning for the predicted risk.
+These representations are fused and passed to classification and regression heads. An LLM provides explainable reasoning for the predicted risk.
 
 ```text
 [Image] ----> [ResNet18] ----\
@@ -36,21 +48,33 @@ Where $\sigma$ is the Sigmoid activation function, ensuring $R \in [0, 1]$.
 
 ```text
 multimodal-driving-risk-intelligence/
-â”œâ”€â”€ app/
-â”‚   â”œâ”€â”€ main.py          # FastAPI backend
-â”‚   â””â”€â”€ ui.py            # Streamlit dashboard
-â”œâ”€â”€ data/                # Synthetic data storage
-â”œâ”€â”€ src/
-â”‚   â”œâ”€â”€ data_engine.py   # Gemini synthetic data generation & PyTorch Dataset
-â”‚   â”œâ”€â”€ inference.py     # Dual-provider LLM reasoning & PyTorch inference
-â”‚   â”œâ”€â”€ model.py         # PyTorch Multimodal Architecture
-â”‚   â””â”€â”€ train.py         # Training loop with early stopping
-â”œâ”€â”€ .env                 # API Keys
-â”œâ”€â”€ requirements.txt     # Dependencies
-â””â”€â”€ README.md            # Documentation
+├── app/
+│   ├── main.py          # FastAPI backend
+│   └── ui.py            # Streamlit dashboard (Python alternative)
+├── data/                # Synthetic data storage
+├── src/
+│   ├── App.tsx          # React Dashboard UI (Browser Preview)
+│   ├── data_engine.py   # Gemini synthetic data generation & PyTorch Dataset
+│   ├── inference.py     # Multi-provider LLM reasoning & PyTorch inference
+│   ├── model.py         # PyTorch Multimodal Architecture
+│   └── train.py         # Training loop with early stopping
+├── .env.example         # API Keys template
+├── requirements.txt     # Python Dependencies
+├── package.json         # Node.js Dependencies (React UI)
+└── README.md            # Documentation
 ```
 
-## Quick-Start Guide (Local & Free)
+## Quick-Start Guide
+
+### 1. Running the React Dashboard (Node.js)
+To run the web-based React dashboard locally:
+```bash
+npm install
+npm run dev
+```
+
+### 2. Running the Python Backend & PyTorch Models
+To run the full machine learning stack locally:
 
 1. **Install Dependencies:**
    ```bash
@@ -61,10 +85,12 @@ multimodal-driving-risk-intelligence/
    Create a `.env` file in the root directory:
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
-   # OPENAI_API_KEY=your_openai_key_here (Optional fallback)
+   OPENAI_API_KEY=your_openai_key_here
+   ANTHROPIC_API_KEY=your_anthropic_key_here
+   DEEPSEEK_API_KEY=your_deepseek_key_here
    ```
 
-3. **Generate Synthetic Data & Train (Optional):**
+3. **Generate Synthetic Data & Train:**
    ```bash
    python src/train.py
    ```
@@ -74,10 +100,7 @@ multimodal-driving-risk-intelligence/
    uvicorn app.main:app --reload --port 8000
    ```
 
-5. **Start the Streamlit UI:**
-   In a new terminal:
+5. **Start the Streamlit UI (Alternative Python UI):**
    ```bash
    streamlit run app/ui.py
    ```
-
-Navigate to `http://localhost:8501` to view the dashboard.

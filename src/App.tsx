@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Car, AlertTriangle, Activity, Info, Upload, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Car, AlertTriangle, Activity, Info, Upload, Zap, ShieldCheck, ListChecks, Image as ImageIcon } from 'lucide-react';
 
 const PROVIDERS = {
   gemini: {
@@ -31,6 +31,17 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (imageFile) {
+      const url = URL.createObjectURL(imageFile);
+      setImageUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setImageUrl(null);
+    }
+  }, [imageFile]);
 
   const handleAnalyze = () => {
     setIsAnalyzing(true);
@@ -41,7 +52,17 @@ export default function App() {
         hazard_name: "Pedestrian",
         risk_score: 0.85,
         provider_used: `${PROVIDERS[provider].name} (${selectedModel})`,
-        reasoning: "The combination of sudden braking and the presence of a pedestrian at the intersection indicates a high risk of collision. Immediate driver intervention or automated emergency braking is recommended."
+        reasoning: "The combination of sudden braking and the presence of a pedestrian at the intersection indicates a high risk of collision. The pedestrian is currently in the crosswalk trajectory.",
+        compliance: "Violation of NHTSA Section 4.2 (Failure to yield to pedestrian right-of-way). System logs indicate reaction time was 1.2s below the required safety threshold for urban environments.",
+        recommendations: [
+          "Engage Automated Emergency Braking (AEB) immediately.",
+          "Alert driver via haptic feedback on steering wheel.",
+          "Log event for fleet safety review and retrain perception model on low-visibility urban intersections."
+        ],
+        boxes: [
+          { top: '35%', left: '45%', width: '15%', height: '40%', label: 'Pedestrian' },
+          { top: '65%', left: '20%', width: '25%', height: '20%', label: 'Vehicle' }
+        ]
       });
       setIsAnalyzing(false);
     }, 1500);
@@ -240,17 +261,98 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Reasoning Card */}
-              <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-blue-100 text-blue-600 p-2 rounded-lg">
-                    <Info size={20} />
+              {/* Images Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Original Image */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-slate-100 text-slate-600 p-2 rounded-lg">
+                      <ImageIcon size={20} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900">Original Dashcam</h3>
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900">AI Reasoning</h3>
+                  <div className="relative aspect-video bg-slate-100 rounded-lg overflow-hidden flex items-center justify-center">
+                    {imageUrl ? (
+                      <img src={imageUrl} alt="Original" className="object-cover w-full h-full" />
+                    ) : (
+                      <span className="text-slate-400 text-sm">No image uploaded</span>
+                    )}
+                  </div>
                 </div>
-                <p className="text-slate-700 leading-relaxed text-lg">
-                  {result.reasoning}
-                </p>
+
+                {/* Annotated Image */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-blue-100 text-blue-600 p-2 rounded-lg">
+                      <Zap size={20} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900">AI Risk Detection</h3>
+                  </div>
+                  <div className="relative aspect-video bg-slate-100 rounded-lg overflow-hidden flex items-center justify-center">
+                    {imageUrl ? (
+                      <>
+                        <img src={imageUrl} alt="Annotated" className="object-cover w-full h-full opacity-90" />
+                        {result.boxes && result.boxes.map((box: any, i: number) => (
+                          <div 
+                            key={i}
+                            className="absolute border-2 border-blue-500 bg-blue-500/20 flex flex-col justify-start"
+                            style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
+                          >
+                            <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 self-start uppercase tracking-wider shadow-sm">
+                              {box.label}
+                            </span>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <span className="text-slate-400 text-sm">No image to analyze</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Analysis Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Reasoning */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm md:col-span-1">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-blue-100 text-blue-600 p-2 rounded-lg">
+                      <Info size={20} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900">AI Reasoning</h3>
+                  </div>
+                  <p className="text-slate-700 leading-relaxed text-sm">
+                    {result.reasoning}
+                  </p>
+                </div>
+
+                {/* Compliance */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm md:col-span-1">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-green-100 text-green-600 p-2 rounded-lg">
+                      <ShieldCheck size={20} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900">Safety & Compliance</h3>
+                  </div>
+                  <p className="text-slate-700 leading-relaxed text-sm">
+                    {result.compliance}
+                  </p>
+                </div>
+
+                {/* Recommendations */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm md:col-span-1">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-purple-100 text-purple-600 p-2 rounded-lg">
+                      <ListChecks size={20} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900">Recommendations</h3>
+                  </div>
+                  <ul className="list-disc list-inside text-slate-700 text-sm space-y-2">
+                    {result.recommendations.map((rec: string, i: number) => (
+                      <li key={i}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
           )}
