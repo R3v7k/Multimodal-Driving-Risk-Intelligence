@@ -1,106 +1,109 @@
 import os
 import json
 import torch
-from torch.utils.data import Dataset
+import numpy as np
 import google.generativeai as genai
-from dotenv import load_dotenv
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
 
-load_dotenv()
+class DrivingDataEngine:
+    """
+    A 'Principal' level data engine that uses Gemini 1.5 Pro to generate 
+    procedural synthetic driving incident metadata and labels.
+    """
+    def __init__(self, api_key=None):
+        api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-1.5-pro')
 
-# Configure Gemini API
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-
-class SyntheticDataGenerator:
-    """Uses Gemini 1.5 Pro to generate synthetic driving incident data."""
-    
-    @staticmethod
-    def generate_data(num_rows: int = 50, output_file: str = "data/synthetic_incidents.json"):
-        if not GEMINI_API_KEY:
-            print("Warning: GEMINI_API_KEY not set. Cannot generate synthetic data.")
-            return
-            
-        print(f"Generating {num_rows} rows of synthetic driving data using Gemini...")
-        
+    def generate_synthetic_scenarios(self, count=10):
+        """
+        Generates N synthetic driving scenarios in JSON format.
+        Each scenario includes: speed, weather, time, text_report, and ground_truth_risk.
+        """
         prompt = f"""
-        Generate a JSON array containing {num_rows} synthetic driving incident reports.
-        Each object must have the following structure:
+        Generate {count} unique autonomous driving risk scenarios.
+        Return ONLY a JSON array of objects with these keys:
+        - scenario_id: int
+        - speed_mph: float (0-80)
+        - weather: string (Clear, Rain, Fog, Snow, Ice)
+        - time_of_day: string (Day, Night, Dawn, Dusk)
+        - incident_report: string (1-2 sentence description of a hazard)
+        - risk_score: float (0.0 to 1.0)
+        - hazard_class: string (Pedestrian, Obstruction, Construction, Aggressive Driver, None)
+
+        Example:
         {{
-            "incident_id": "string",
-            "speed_mph": float (0-120),
-            "weather_condition": int (0=Clear, 1=Rain, 2=Snow, 3=Fog),
-            "time_of_day": int (0-23),
-            "driver_alertness_score": float (0.0 to 1.0),
-            "report_text": "string (A short 1-2 sentence description of the incident)",
-            "hazard_category": int (0=None, 1=Vehicle, 2=Pedestrian, 3=Animal, 4=Infrastructure),
-            "risk_score": float (0.0 to 1.0)
+            "scenario_id": 1,
+            "speed_mph": 45.5,
+            "weather": "Rain",
+            "time_of_day": "Night",
+            "incident_report": "Vehicle ahead hydroplaned and is spinning across three lanes.",
+            "risk_score": 0.95,
+            "hazard_class": "Obstruction"
         }}
-        Ensure realistic correlations (e.g., high speed + snow + low alertness = high risk).
-        Output ONLY valid JSON.
         """
         
         try:
-            model = genai.GenerativeModel('gemini-1.5-pro')
-            response = model.generate_content(prompt)
-            
-            # Clean up response text to extract JSON
-            response_text = response.text.strip()
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3]
-            elif response_text.startswith("```"):
-                response_text = response_text[3:-3]
-                
-            data = json.loads(response_text)
-            
-            os.makedirs(os.path.dirname(output_file), exist_ok=True)
-            with open(output_file, 'w') as f:
-                json.dump(data, f, indent=4)
-                
-            print(f"Successfully generated and saved data to {output_file}")
-            return data
-            
+            response = self.model.generate_content(prompt)
+            # Clean Markdown formatting if present
+            clean_json = response.text.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean_json)
         except Exception as e:
             print(f"Error generating data: {e}")
-            return None
+            return []
 
-class DrivingIncidentDataset(Dataset):
-    """PyTorch Dataset for Multimodal Driving Data."""
-    
-    def __init__(self, data_file: str, text_embed_dim: int = 50):
-        with open(data_file, 'r') as f:
-            self.data = json.load(f)
-            
-        self.text_embed_dim = text_embed_dim
-        
+class MultimodalDrivingDataset(Dataset):
+    """
+    PyTorch Dataset that handles the fusion of Images and Synthetic Metadata.
+    """
+    def __init__(self, scenarios, transform=None):
+        self.scenarios = scenarios
+        self.transform = transform
+        # Mapping for categorical data
+        self.weather_map = {"Clear": 0, "Rain": 1, "Fog": 2, "Snow": 3, "Ice": 4}
+        self.hazard_map = {"None": 0, "Pedestrian": 1, "Obstruction": 2, "Construction": 3, "Aggressive Driver": 4}
+
     def __len__(self):
-        return len(self.data)
-        
+        return len(self.scenarios)
+
     def __getitem__(self, idx):
-        item = self.data[idx]
+        s = self.scenarios[idx]
         
-        # 1. Mock Image (3, 224, 224) - In a real scenario, load from disk
-        image = torch.randn(3, 224, 224)
+        # 1. Structured Data Vector
+        # Normalize speed (approx max 100)
+        speed_norm = s['speed_mph'] / 100.0
+        weather_idx = self.weather_map.get(s['weather'], 0) / 4.0
         
-        # 2. Structured Data
-        structured = torch.tensor([
-            item['speed_mph'],
-            item['weather_condition'],
-            item['time_of_day'],
-            item['driver_alertness_score']
-        ], dtype=torch.float32)
+        structured_vec = torch.tensor([speed_norm, weather_idx], dtype=torch.float32)
         
-        # 3. Text Data (Mock embeddings for simplicity)
-        # In production, use a tokenizer/embedding layer or pre-computed embeddings
-        seq_len = 10
-        text_embeds = torch.randn(seq_len, self.text_embed_dim)
+        # 2. Labels
+        risk_label = torch.tensor([s['risk_score']], dtype=torch.float32)
+        hazard_label = torch.tensor(self.hazard_map.get(s['hazard_class'], 0), dtype=torch.long)
         
-        # 4. Labels
-        hazard_class = torch.tensor(item['hazard_category'], dtype=torch.long)
-        risk_score = torch.tensor([item['risk_score']], dtype=torch.float32)
+        # Note: In a real run, you would load an actual image here.
+        # For this 'Build Mode' demo, we return a placeholder if no image path exists.
+        placeholder_image = torch.randn(3, 224, 224) 
         
-        return image, structured, text_embeds, hazard_class, risk_score
+        return {
+            "image": placeholder_image,
+            "structured": structured_vec,
+            "risk": risk_label,
+            "hazard": hazard_label,
+            "report": s['incident_report']
+        }
 
 if __name__ == "__main__":
-    # Generate data if run directly
-    SyntheticDataGenerator.generate_data()
+    # Test Run
+    engine = DrivingDataEngine()
+    print("🚀 Generating 5 scenarios via Gemini...")
+    data = engine.generate_synthetic_scenarios(count=5)
+    
+    if data:
+        dataset = MultimodalDrivingDataset(data)
+        dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
+        
+        for batch in dataloader:
+            print(f"Batch Structured Shape: {batch['structured'].shape}")
+            print(f"Example Risk Score: {batch['risk'][0].item()}")
+            break

@@ -1,10 +1,11 @@
 import os
+import json
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from model import MultimodalRiskModel
-from data_engine import DrivingIncidentDataset, SyntheticDataGenerator
+from data_engine import MultimodalDrivingDataset, DrivingDataEngine
 
 def train_model(epochs: int = 10, batch_size: int = 8, lr: float = 1e-4):
     """Training loop with Early Stopping and Checkpointing."""
@@ -12,16 +13,24 @@ def train_model(epochs: int = 10, batch_size: int = 8, lr: float = 1e-4):
     data_path = "data/synthetic_incidents.json"
     if not os.path.exists(data_path):
         print("Data not found. Generating synthetic data...")
-        SyntheticDataGenerator.generate_data(num_rows=100, output_file=data_path)
-        
-    dataset = DrivingIncidentDataset(data_path)
+        engine = DrivingDataEngine()
+        data = engine.generate_synthetic_scenarios(count=100)
+        os.makedirs("data", exist_ok=True)
+        with open(data_path, "w") as f:
+            json.dump(data, f)
+    else:
+        with open(data_path, "r") as f:
+            data = json.load(f)
+            
+    dataset = MultimodalDrivingDataset(data)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Training on device: {device}")
     
+    # Updated to 2 structured features (speed, weather) based on new dataset
     model = MultimodalRiskModel(
-        num_structured_features=4, 
+        num_structured_features=2, 
         text_embedding_dim=50, 
         num_classes=5
     ).to(device)
@@ -42,12 +51,17 @@ def train_model(epochs: int = 10, batch_size: int = 8, lr: float = 1e-4):
     for epoch in range(epochs):
         epoch_loss = 0.0
         
-        for batch_idx, (images, structured, text, labels_class, labels_risk) in enumerate(dataloader):
-            images = images.to(device)
-            structured = structured.to(device)
-            text = text.to(device)
-            labels_class = labels_class.to(device)
-            labels_risk = labels_risk.to(device)
+        for batch_idx, batch in enumerate(dataloader):
+            images = batch['image'].to(device)
+            structured = batch['structured'].to(device)
+            labels_class = batch['hazard'].to(device)
+            labels_risk = batch['risk'].to(device)
+            
+            # The new dataset returns raw text reports. For this example,
+            # we generate dummy embeddings to match the model's expected input.
+            # In a real scenario, you would use a tokenizer/embedding layer here.
+            b_size = images.size(0)
+            text = torch.randn(b_size, 10, 50).to(device)
             
             optimizer.zero_grad()
             

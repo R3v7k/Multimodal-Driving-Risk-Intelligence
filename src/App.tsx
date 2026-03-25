@@ -1,15 +1,36 @@
 import React, { useState } from 'react';
 import { Car, AlertTriangle, Activity, Info, Upload, Zap } from 'lucide-react';
 
+const PROVIDERS = {
+  gemini: {
+    name: "Gemini",
+    models: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.1-pro-preview"]
+  },
+  openai: {
+    name: "OpenAI",
+    models: ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+  },
+  claude: {
+    name: "Claude",
+    models: ["claude-3-5-sonnet-20240620", "claude-3-opus-20240229", "claude-3-haiku-20240307"]
+  },
+  deepseek: {
+    name: "DeepSeek",
+    models: ["deepseek-chat", "deepseek-coder"]
+  }
+};
+
 export default function App() {
   const [speed, setSpeed] = useState(45);
   const [weather, setWeather] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState(14);
   const [alertness, setAlertness] = useState(0.8);
   const [report, setReport] = useState("Sudden braking detected while approaching an intersection.");
-  const [provider, setProvider] = useState("gemini");
+  const [provider, setProvider] = useState<keyof typeof PROVIDERS>("gemini");
+  const [selectedModel, setSelectedModel] = useState(PROVIDERS.gemini.models[0]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const handleAnalyze = () => {
     setIsAnalyzing(true);
@@ -19,7 +40,7 @@ export default function App() {
         hazard_category: 2,
         hazard_name: "Pedestrian",
         risk_score: 0.85,
-        provider_used: provider,
+        provider_used: `${PROVIDERS[provider].name} (${selectedModel})`,
         reasoning: "The combination of sudden braking and the presence of a pedestrian at the intersection indicates a high risk of collision. Immediate driver intervention or automated emergency braking is recommended."
       });
       setIsAnalyzing(false);
@@ -43,10 +64,23 @@ export default function App() {
           {/* Image Upload */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Dashcam Image</label>
-            <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition-colors cursor-pointer">
+            <label htmlFor="image-upload" className="block border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition-colors cursor-pointer">
               <Upload className="mx-auto text-slate-400 mb-2" size={20} />
-              <span className="text-sm text-slate-500">Upload JPG, PNG</span>
-            </div>
+              <span className="text-sm text-slate-500 truncate block px-2">
+                {imageFile ? imageFile.name : "Upload JPG, PNG"}
+              </span>
+              <input 
+                id="image-upload" 
+                type="file" 
+                accept="image/jpeg, image/png" 
+                className="hidden" 
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setImageFile(e.target.files[0]);
+                  }
+                }} 
+              />
+            </label>
           </div>
 
           {/* Speed */}
@@ -99,21 +133,31 @@ export default function App() {
 
           {/* Provider */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">LLM Provider</label>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setProvider('gemini')}
-                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${provider === 'gemini' ? 'bg-blue-100 text-blue-700 border-2 border-blue-600' : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'}`}
-              >
-                Gemini 1.5
-              </button>
-              <button 
-                onClick={() => setProvider('openai')}
-                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${provider === 'openai' ? 'bg-blue-100 text-blue-700 border-2 border-blue-600' : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'}`}
-              >
-                OpenAI
-              </button>
-            </div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">LLM Provider</label>
+            <select 
+              value={provider} 
+              onChange={(e) => {
+                const newProvider = e.target.value as keyof typeof PROVIDERS;
+                setProvider(newProvider);
+                setSelectedModel(PROVIDERS[newProvider].models[0]);
+              }} 
+              className="w-full border border-slate-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none mb-3"
+            >
+              {Object.entries(PROVIDERS).map(([key, data]) => (
+                <option key={key} value={key}>{data.name}</option>
+              ))}
+            </select>
+
+            <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
+            <select 
+              value={selectedModel} 
+              onChange={(e) => setSelectedModel(e.target.value)} 
+              className="w-full border border-slate-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              {PROVIDERS[provider].models.map((model) => (
+                <option key={model} value={model}>{model}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -154,7 +198,7 @@ export default function App() {
             <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
               <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
               <h3 className="text-lg font-medium text-slate-900">Processing Multimodal Data...</h3>
-              <p className="text-slate-500">Running ResNet vision backbone and querying {provider === 'gemini' ? 'Gemini 1.5 Pro' : 'OpenAI'}...</p>
+              <p className="text-slate-500">Running ResNet vision backbone and querying {PROVIDERS[provider].name} ({selectedModel})...</p>
             </div>
           )}
 
