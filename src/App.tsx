@@ -116,7 +116,15 @@ export default function App() {
       - Driver Alertness: ${alertness}
       - Incident Report: ${report}${learningContext}
 
-      Identify all relevant hazards and objects. Provide a highly detailed analysis (at least 2-3 paragraphs of reasoning), image type detection (e.g., Dashcam, Traffic Camera, Mobile Phone, Synthetic), a risk score (0.0 to 1.0), compliance violations, recommendations, and bounding boxes for ALL detected objects (top, left, width, height as percentages like '35%'). For bounding boxes, provide a highly specific label (e.g., 'Debris - Tire Tread', 'Pedestrian - Child', 'Unknown Obstacle') and a specific hex color code based on the object type (e.g., #ef4444 for vehicles/high risk, #22c55e for pedestrians, #eab308 for debris/warnings, #3b82f6 for infrastructure).`;
+      Identify all relevant hazards and objects. Provide a highly detailed analysis (at least 2-3 paragraphs of reasoning), image type detection (e.g., Dashcam, Traffic Camera, Mobile Phone, Synthetic), a risk score (0.0 to 1.0), compliance violations, recommendations, and bounding boxes for ALL detected objects (top, left, width, height as percentages like '35%'). 
+      
+      For bounding boxes, provide a highly specific label (e.g., 'Debris - Tire Tread', 'Pedestrian - Child', 'Unknown Obstacle').
+      
+      Assign a specific hex color code and a Tailwind color class based on the artifact type:
+      - Emergency (Ambulance, Fire Truck, Police, Firefighter, Responder): #ef4444 / bg-red-500
+      - Standard Vehicles (Car, SUV, Truck, Bus, Motorcycle): #3b82f6 / bg-blue-500
+      - Personnel (Pedestrian, Cyclist, Worker): #22c55e / bg-green-500
+      - Hazards/Debris (Debris, Cone, Barrier, Hazard): #eab308 / bg-yellow-500`;
 
       const parts: any[] = [];
       if (base64Data && mimeType) {
@@ -145,7 +153,7 @@ export default function App() {
               type: Type.ARRAY,
               items: { type: Type.STRING }
             },
-            boxes: {
+            detections: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
@@ -155,7 +163,8 @@ export default function App() {
                   width: { type: Type.STRING, description: "Percentage, e.g., '15%'" },
                   height: { type: Type.STRING, description: "Percentage, e.g., '40%'" },
                   label: { type: Type.STRING },
-                  color: { type: Type.STRING, description: "Hex color code for the bounding box based on object type" }
+                  color: { type: Type.STRING, description: "Hex color code for the bounding box based on object type" },
+                  colorClass: { type: Type.STRING, description: "Tailwind color class (e.g., bg-red-500, bg-blue-500, bg-green-500, bg-yellow-500)" }
                 }
               }
             }
@@ -569,42 +578,42 @@ export default function App() {
                     {imageUrl ? (
                       <>
                         <img src={imageUrl} alt="Annotated" className="object-cover w-full h-full opacity-90" />
-                        {result.boxes && result.boxes.map((box: any, i: number) => (
+                        {result.detections && result.detections.map((box: any, i: number) => (
                           <div 
                             key={i}
-                            className="absolute border-[1.5px] rounded-sm shadow-[0_0_8px_rgba(0,0,0,0.5)] transition-all duration-200 hover:border-[3px] hover:z-10 group"
+                            className="absolute border-[1.5px] rounded-sm transition-all duration-200 hover:border-[3px] hover:z-10 group"
                             style={{ 
                               top: box.top, 
                               left: box.left, 
                               width: box.width, 
                               height: box.height,
                               borderColor: box.color || '#00ff00',
-                              boxShadow: `0 0 10px ${box.color || '#00ff00'}80, inset 0 0 10px ${box.color || '#00ff00'}40`
+                              backgroundColor: `${box.color || '#00ff00'}33`, // 20% opacity fill
                             }}
-                          >
-                            <div className="absolute top-full left-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/90 backdrop-blur-sm text-white text-xs px-2 py-1 rounded whitespace-nowrap z-20 pointer-events-none border border-slate-700">
-                              {box.label}
-                            </div>
-                          </div>
+                          />
                         ))}
                       </>
                     ) : (
                       <span className="text-slate-400 text-sm">No image to analyze</span>
                     )}
                   </div>
-                  {result.boxes && result.boxes.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {Object.entries(result.boxes.reduce((acc: any, box: any) => {
-                        if (!acc[box.label]) {
-                          acc[box.label] = { count: 0, color: box.color };
+                  {result.detections && result.detections.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {Object.entries(result.detections.reduce((acc: any, curr: any) => {
+                        const typeName = curr.label.replace(/^\d+\s*/, '').trim(); 
+                        if (!acc[typeName]) {
+                          acc[typeName] = { count: 0, colorClass: curr.colorClass || 'bg-blue-500' };
                         }
-                        acc[box.label].count += 1;
+                        acc[typeName].count += 1;
                         return acc;
-                      }, {})).map(([label, data]: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
-                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: data.color || '#00ff00' }}></span>
-                          {label}
-                          <span className="bg-slate-200 text-slate-800 px-2 rounded-full text-[10px] font-bold">
+                      }, {})).map(([typeName, data]: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${data.colorClass}`}></div>
+                            <span>{typeName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-1 mx-4 border-b border-dotted border-slate-300 h-1 mt-1"></div>
+                          <span className={`${data.colorClass} text-white px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-sm`}>
                             {data.count}
                           </span>
                         </div>
@@ -879,43 +888,44 @@ export default function App() {
                     {selectedHistoryItem.imageUrl ? (
                       <>
                         <img src={selectedHistoryItem.imageUrl} alt="Dashcam" className="object-cover w-full h-full opacity-90" />
-                        {selectedHistoryItem.result.boxes && selectedHistoryItem.result.boxes.map((box: any, i: number) => (
+                        {selectedHistoryItem.result.detections && selectedHistoryItem.result.detections.map((box: any, i: number) => (
                           <div 
                             key={i}
-                            className="absolute border-[1.5px] rounded-sm shadow-[0_0_8px_rgba(0,0,0,0.5)] transition-all duration-200 hover:border-[3px] hover:z-10 group"
+                            className="absolute border-[1.5px] rounded-sm transition-all duration-200 hover:border-[3px] hover:z-10 group"
                             style={{ 
                               top: box.top, 
                               left: box.left, 
                               width: box.width, 
                               height: box.height,
                               borderColor: box.color || '#00ff00',
-                              boxShadow: `0 0 10px ${box.color || '#00ff00'}80, inset 0 0 10px ${box.color || '#00ff00'}40`
+                              backgroundColor: `${box.color || '#00ff00'}33`, // 20% opacity fill
                             }}
-                          >
-                            <div 
-                              className="absolute -top-3 -left-3 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white"
-                              style={{ backgroundColor: box.color || '#00ff00' }}
-                            >
-                              {i + 1}
-                            </div>
-                            <div className="absolute top-full left-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/90 backdrop-blur-sm text-white text-xs px-2 py-1 rounded whitespace-nowrap z-20 pointer-events-none border border-slate-700">
-                              {box.label}
-                            </div>
-                          </div>
+                          />
                         ))}
                       </>
                     ) : (
                       <div className="text-slate-400 flex flex-col items-center"><ImageIcon size={48} className="mb-2 opacity-50"/>No Image Provided</div>
                     )}
                   </div>
-                  {selectedHistoryItem.result.boxes && selectedHistoryItem.result.boxes.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {selectedHistoryItem.result.boxes.map((box: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
-                          <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] text-white font-bold shadow-sm" style={{ backgroundColor: box.color || '#00ff00' }}>
-                            {i + 1}
+                  {selectedHistoryItem.result.detections && selectedHistoryItem.result.detections.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {Object.entries(selectedHistoryItem.result.detections.reduce((acc: any, curr: any) => {
+                        const typeName = curr.label.replace(/^\d+\s*/, '').trim(); 
+                        if (!acc[typeName]) {
+                          acc[typeName] = { count: 0, colorClass: curr.colorClass || 'bg-blue-500' };
+                        }
+                        acc[typeName].count += 1;
+                        return acc;
+                      }, {})).map(([typeName, data]: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${data.colorClass}`}></div>
+                            <span>{typeName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-1 mx-4 border-b border-dotted border-slate-300 h-1 mt-1"></div>
+                          <span className={`${data.colorClass} text-white px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-sm`}>
+                            {data.count}
                           </span>
-                          {box.label}
                         </div>
                       ))}
                     </div>
